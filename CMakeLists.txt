@@ -1,13 +1,15 @@
 cmake_minimum_required(VERSION 3.12)
 
-project(obs-face-tracker VERSION 0.7.1)
+project(obs-face-tracker VERSION 0.7.2)
 set(PLUGIN_AUTHOR "Norihiro Kamae")
 set(MACOS_BUNDLEID "net.nagater.obs-face-tracker")
 set(MACOS_PACKAGE_UUID "A2EB2F73-9828-40C4-A307-F47282BB8D3F")
 set(MACOS_INSTALLER_UUID "652CF739-5A6F-4DAC-9611-B068FAC15BF3")
+set(PLUGIN_URL "https://obsproject.com/forum/resources/face-tracker.1294/")
 set(LINUX_MAINTAINER_EMAIL "norihiro@nagater.net")
 
 option(WITH_PTZ_TCP "Enable to connect PTZ camera through TCP socket" ON)
+option(WITH_DLIB_SUBMODULE "Link dlib from submodule" ON)
 option(ENABLE_MONITOR_USER "Enable monitor source for user" OFF)
 option(ENABLE_DEBUG_DATA "Enable property to save error and control data" OFF)
 option(WITH_DOCK "Enable dock" ON)
@@ -15,7 +17,7 @@ option(ENABLE_DATAGEN "Enable generating data" OFF)
 
 set(CMAKE_PREFIX_PATH "${QTDIR}")
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(plugin_additional_libs)
@@ -35,36 +37,42 @@ find_package(obs-frontend-api REQUIRED)
 include(cmake/ObsPluginHelpers.cmake)
 find_qt(VERSION ${QT_VERSION} COMPONENTS Widgets Core Gui)
 
-set(CMAKE_POSITION_INDEPENDENT_CODE True)
-set(DLIB_NO_GUI_SUPPORT ON)
-set(DLIB_PNG_SUPPORT OFF)
-set(DLIB_GIF_SUPPORT OFF)
-set(DLIB_USE_FFMPEG OFF)
-set(DLIB_JPEG_SUPPORT OFF)
-set(DLIB_LINK_WITH_SQLITE3 OFF)
-set(DLIB_WEBP_SUPPORT OFF)
-set(DLIB_TEST_COMPILE_ALL_SOURCE_CPP OFF)
-add_subdirectory(dlib)
+if (WITH_DLIB_SUBMODULE)
+	set(CMAKE_POSITION_INDEPENDENT_CODE True)
+	set(DLIB_NO_GUI_SUPPORT ON)
+	set(DLIB_PNG_SUPPORT OFF)
+	set(DLIB_GIF_SUPPORT OFF)
+	set(DLIB_USE_FFMPEG OFF)
+	set(DLIB_JPEG_SUPPORT OFF)
+	set(DLIB_LINK_WITH_SQLITE3 OFF)
+	set(DLIB_WEBP_SUPPORT OFF)
+	set(DLIB_JXL_SUPPORT OFF)
+	set(DLIB_TEST_COMPILE_ALL_SOURCE_CPP OFF)
+	add_subdirectory(dlib)
+else()
+	find_package(dlib REQUIRED)
+	add_library(dlib ALIAS dlib::dlib)
+endif()
 
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
 configure_file(
-    src/plugin-macros.h.in
-    ../src/plugin-macros.generated.h
+	src/plugin-macros.h.in
+	plugin-macros.generated.h
 )
 configure_file(
-    installer/installer-Windows.iss.in
-    ../installer/installer-Windows.generated.iss
+	installer/installer-Windows.iss.in
+	installer-Windows.generated.iss
 )
 
 configure_file(
-    ci/ci_includes.sh.in
-    ../ci/ci_includes.generated.sh
+	ci/ci_includes.sh.in
+	ci/ci_includes.generated.sh
 )
 configure_file(
-    ci/ci_includes.cmd.in
-    ../ci/ci_includes.generated.cmd
+	ci/ci_includes.cmd.in
+	ci/ci_includes.generated.cmd
 )
 
 set(PLUGIN_SOURCES
@@ -117,19 +125,31 @@ target_link_libraries(${CMAKE_PROJECT_NAME}
 	${plugin_additional_libs}
 )
 
+target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
+	${CMAKE_CURRENT_BINARY_DIR}
+)
+
 if(OS_WINDOWS)
 	# Enable Multicore Builds and disable FH4 (to not depend on VCRUNTIME140_1.DLL when building with VS2019)
 	if (MSVC)
 		add_definitions(/MP /d2FH4-)
 		add_definitions("-D_USE_MATH_DEFINES")
 		add_definitions("-D_CRT_SECURE_NO_WARNINGS") # to avoid a warning for `fopen`
+		add_definitions("-D_DISABLE_CONSTEXPR_MUTEX_CONSTRUCTOR") # TODO: Remove once requiring OBS 30.2 or later.
 	endif()
 
 	target_link_libraries(${CMAKE_PROJECT_NAME} OBS::w32-pthreads)
 endif()
 
 if(OS_LINUX)
-	target_compile_options(${CMAKE_PROJECT_NAME} PRIVATE -Wall -Wextra)
+	target_compile_options(${CMAKE_PROJECT_NAME}
+		PRIVATE
+		-Wall
+		-Wextra
+		-Wunused-function
+		-Werror
+		-Wno-error=deprecated-declarations # TODO: Replace obs_frontend_add_dock with the new API.
+	)
 	target_link_options(${CMAKE_PROJECT_NAME} PRIVATE "-Wl,-z,defs")
 endif()
 
@@ -149,6 +169,9 @@ configure_file(installer/installer-macOS.pkgproj.in installer-macOS.generated.pk
 if(ENABLE_DATAGEN)
 	add_executable(face-detector-dlib-hog-datagen
 		src/face-detector-dlib-hog-datagen.cpp
+	)
+	target_include_directories(face-detector-dlib-hog-datagen PRIVATE
+		${CMAKE_CURRENT_BINARY_DIR}
 	)
 	target_link_libraries(face-detector-dlib-hog-datagen
 		dlib

@@ -418,7 +418,7 @@ static obs_properties_t *ftptz_properties(void *data)
 		obs_property_float_set_suffix(p, " s");
 		obs_properties_add_int(pp, "face_lost_ptz_preset", "Recall memory (-1 for disable)", -1, 15, 1);
 		obs_properties_add_group(props, "facelost", obs_module_text("Face lost behavior"), OBS_GROUP_NORMAL, pp);
-		p = obs_properties_add_float(pp, "face_lost_zoomout_timeout", "Timeout until zoom-out", 0.1, 60.0, 0.1);
+		p = obs_properties_add_float(pp, "face_lost_zoomout_timeout", "Timeout until zoom-out", 0.0, 60.0, 0.1);
 		obs_property_float_set_suffix(p, " s");
 	}
 
@@ -818,11 +818,6 @@ static void ftptz_tick(void *data, float second)
 		s->ftm->dev->tick();
 		s->ptz_query[2] = s->ftm->dev->get_zoom();
 	}
-}
-
-static inline void render_target(struct face_tracker_ptz *s, obs_source_t *, obs_source_t *)
-{
-	s->ftm->cvtex_cache.reset();
 }
 
 static inline void calculate_error(struct face_tracker_ptz *s)
