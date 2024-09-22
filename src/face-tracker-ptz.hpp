@@ -33,7 +33,8 @@ struct face_tracker_ptz
 	f3 filter_lpf;
 	float f_att_int;
 	int u[3];
-	int ptz_query[3];
+	float u_linear[3];
+	float ptz_query[3];
 	uint64_t face_found_last_ns;
 	int face_lost_preset_sent;
 
@@ -52,7 +53,6 @@ struct face_tracker_ptz
 	char *debug_data_control_last;
 
 	char *ptz_type;
-	int ptz_max_x, ptz_max_y, ptz_max_z;
 
 	bool is_paused;
 	obs_hotkey_pair_id hotkey_pause;

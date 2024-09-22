@@ -25,6 +25,7 @@ libvisca_thread::libvisca_thread()
 	zoom_got = 0;
 	pthread_mutex_init(&mutex, 0);
 
+	add_ref(); // release inside thread_main
 	pthread_t thread;
 	pthread_create(&thread, NULL, libvisca_thread::thread_main, (void*)this);
 	pthread_detach(thread);
@@ -79,9 +80,13 @@ void libvisca_thread::thread_connect()
 void *libvisca_thread::thread_main(void *data)
 {
 	auto *visca = (libvisca_thread*)data;
-	visca->add_ref();
+
+	// add_ref() was called just before creating this thread.
+
 	visca->thread_loop();
+
 	visca->release();
+
 	return NULL;
 }
 
@@ -234,4 +239,21 @@ void libvisca_thread::set_config(struct obs_data *data_)
 	data = data_;
 
 	pthread_mutex_unlock(&mutex);
+}
+
+float libvisca_thread::raw2zoomfactor(int zoom)
+{
+	// TODO: configurable
+	return expf((float)zoom * (logf(20.0f) / 16384.f));
+}
+
+bool libvisca_thread::ptz_type_modified(obs_properties_t *pp, obs_data_t *settings)
+{
+	(void)settings;
+	if (obs_properties_get(pp, "ptz.visca-over-tcp.address"))
+		return false;
+
+	obs_properties_add_text(pp, "ptz.visca-over-tcp.address", obs_module_text("IP address"), OBS_TEXT_DEFAULT);
+	obs_properties_add_int(pp, "ptz.visca-over-tcp.port", obs_module_text("Port"), 1, 65535, 1);
+	return true;
 }
